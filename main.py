@@ -28,6 +28,7 @@ from utils import (
     split_text,
 )
 from NBC_feature import get_NBC_features
+from joblib import dump, load
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer,encoding='utf8')
 
 def parse_args():
@@ -40,6 +41,18 @@ def parse_args():
         type = str,
         default = "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli",
         help = "The model path used to receive promises and hypotheses to output entailment scores.",
+    )
+    parser.add_argument(
+        "--classify",
+        type = bool,
+        default = True,
+        help = "Whether to classify news.",
+    )
+    parser.add_argument(
+        "--classifier",
+        type = str,
+        default = "fake_news_classifier.joblib",
+        help = "The fake news classifier model path.",
     )
     parser.add_argument(
         "--tokenizer_name",
@@ -152,6 +165,8 @@ def main():
     model = AutoModelForSequenceClassification.from_pretrained(args.model_name).to(device)
     
     NBC_file_path = [args.NBC_file_path + "/NBC_positive.json", args.NBC_file_path + "/NBC_negative.json"]
+    
+    
     #print(NBC_file_path)
     NBC_features = get_NBC_features(model, tokenizer, NBC_file_path)
     neg_features = NBC_features['neg_features']
@@ -189,6 +204,14 @@ def evaluate(dataset, tokenizer, model, C_M, C_FA, C_retrieve, P0, neg_features,
     
     sentence_search_time_list = []
     hypothesis_search_time_list = []
+    
+    classifier = None
+    if args.classify == True:
+        try:
+            classifier = load(args.classifier)
+        except:
+            print("Load classifier failed!")
+            classifier = None
     
     for passage in tqdm(dataset):
         # print(passage_index,flush=True)
@@ -246,9 +269,14 @@ def evaluate(dataset, tokenizer, model, C_M, C_FA, C_retrieve, P0, neg_features,
                             if new_Entailment_prob > Entailment_prob:
                                 Entailment_prob = new_Entailment_prob
                                 
+                                
+                        if classifier != None:
+                            real_prob = sum(classifier.predict(segment_list))/len(segment_list)
+                            Entailment_prob *= real_prob
                         P_nplus1_given_1 = pos_features[int((Entailment_prob-0.1)/10)] / sum(pos_features)
                         P_nplus1_given_0 = neg_features[int((Entailment_prob-0.1)/10)] / sum(neg_features)
                         P = P*P_nplus1_given_1/((1-P)*P_nplus1_given_0+P*P_nplus1_given_1)  
+                        
                         #print(P,flush=True) 
                            
                         stop_cost = min_cost(P, C_M, C_FA)
