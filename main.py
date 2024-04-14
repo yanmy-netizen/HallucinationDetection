@@ -252,7 +252,7 @@ def evaluate(dataset, tokenizer, model, classifier, C_M, C_FA, C_retrieve, P0, n
             hypothesis_P_list = []
             hypothesis_search_time = []
             
-            # print(f"real_news:{real_news}, fake_news:{fake_news}")
+
             
             for hypothesis in hypothesis_list:
                 hypothesis_web = sentence_web[hypothesis]
@@ -282,12 +282,12 @@ def evaluate(dataset, tokenizer, model, classifier, C_M, C_FA, C_retrieve, P0, n
                             )
                             if new_Entailment_prob > Entailment_prob:
                                 Entailment_prob = new_Entailment_prob
-                                if classifier != None:
-                                    real_prob = classifier.predict([segment])[0]
+                                # if classifier != None:
+                                #     real_prob = classifier.predict([segment])[0]
                                 
                                 
                         if classifier != None:
-                            # real_prob = sum(classifier.predict(segment_list))/len(segment_list)
+                            real_prob = sum(classifier.predict(segment_list))/len(segment_list)
                             if real_prob >= 0.5:
                                 P_nplus1_given_1 = pos_features[1][int((Entailment_prob-0.1)/10)] / sum(pos_features[1])
                                 P_nplus1_given_0 = neg_features[1][int((Entailment_prob-0.1)/10)] / sum(neg_features[1])
@@ -331,6 +331,7 @@ def evaluate(dataset, tokenizer, model, classifier, C_M, C_FA, C_retrieve, P0, n
                 
             if predict_label != golden_label:
                 wrong_num+=1
+                print(f"real_news:{real_news}, fake_news:{fake_news}")
                 print(wrong_num, total_num, flush=True)
                 
             total_num+=1
