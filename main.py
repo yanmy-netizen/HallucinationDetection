@@ -166,15 +166,26 @@ def main():
     
     NBC_file_path = [args.NBC_file_path + "/NBC_positive.json", args.NBC_file_path + "/NBC_negative.json"]
     
+    classifier = None
+    if args.classify == True:
+        try:
+            classifier = load(args.classifier)
+        except:
+            print("Load classifier failed!")
+            classifier = None
     
     #print(NBC_file_path)
-    NBC_features = get_NBC_features(model, tokenizer, NBC_file_path)
+    NBC_features = get_NBC_features(model, tokenizer, NBC_file_path, classifier)
     neg_features = NBC_features['neg_features']
     pos_features = NBC_features['pos_features']
     
     #Laplace smoothing
-    neg_features = [x + 1 for x in neg_features]
-    pos_features = [x + 1 for x in pos_features]
+    if classifier == None:
+        neg_features = [x + 1 for x in neg_features]
+        pos_features = [x + 1 for x in pos_features]
+    else:
+        neg_features = [[y+1 for y in x] for x in neg_features]
+        pos_features = [[y+1 for y in x] for x in pos_features]
     
     print(neg_features, pos_features, flush=True)
     
@@ -183,6 +194,7 @@ def main():
         dataset = dataset,
         tokenizer = tokenizer,
         model = model,
+        classifier = classifier,
         C_M = args.C_M,
         C_FA = args.C_FA,
         C_retrieve = args.C_Retrieve,
@@ -192,10 +204,13 @@ def main():
         args = args
     )
 
-def evaluate(dataset, tokenizer, model, C_M, C_FA, C_retrieve, P0, neg_features, pos_features, args):
+def evaluate(dataset, tokenizer, model, classifier, C_M, C_FA, C_retrieve, P0, neg_features, pos_features, args):
     passage_index = 0
     wrong_num = 0
     total_num = 0
+    
+    real_news = 0
+    fake_news = 0
     
     sentence_golden_label_list = []
     sentence_test_list = []
@@ -205,13 +220,7 @@ def evaluate(dataset, tokenizer, model, C_M, C_FA, C_retrieve, P0, neg_features,
     sentence_search_time_list = []
     hypothesis_search_time_list = []
     
-    classifier = None
-    if args.classify == True:
-        try:
-            classifier = load(args.classifier)
-        except:
-            print("Load classifier failed!")
-            classifier = None
+
     
     for passage in tqdm(dataset):
         # print(passage_index,flush=True)
@@ -243,6 +252,8 @@ def evaluate(dataset, tokenizer, model, C_M, C_FA, C_retrieve, P0, neg_features,
             hypothesis_P_list = []
             hypothesis_search_time = []
             
+            # print(f"real_news:{real_news}, fake_news:{fake_news}")
+            
             for hypothesis in hypothesis_list:
                 hypothesis_web = sentence_web[hypothesis]
                 
@@ -250,7 +261,10 @@ def evaluate(dataset, tokenizer, model, C_M, C_FA, C_retrieve, P0, neg_features,
                 P = P0
                 search_time = 0
                 stop_cost = min_cost(P, C_M, C_FA)
-                search_cost = C_retrieve + min_cost(cal_En_plus1(neg_features, pos_features, P), C_M, C_FA)
+                if classifier == None:
+                    search_cost = C_retrieve + min_cost(cal_En_plus1(neg_features, pos_features, P), C_M, C_FA)
+                else:
+                    search_cost = C_retrieve + min_cost(cal_En_plus1(neg_features[2], pos_features[2], P), C_M, C_FA)
                 
                 for web in hypothesis_web:
                     if stop_cost > search_cost:
@@ -268,19 +282,32 @@ def evaluate(dataset, tokenizer, model, C_M, C_FA, C_retrieve, P0, neg_features,
                             )
                             if new_Entailment_prob > Entailment_prob:
                                 Entailment_prob = new_Entailment_prob
+                                if classifier != None:
+                                    real_prob = classifier.predict([segment])[0]
                                 
                                 
                         if classifier != None:
-                            real_prob = sum(classifier.predict(segment_list))/len(segment_list)
-                            Entailment_prob *= real_prob
-                        P_nplus1_given_1 = pos_features[int((Entailment_prob-0.1)/10)] / sum(pos_features)
-                        P_nplus1_given_0 = neg_features[int((Entailment_prob-0.1)/10)] / sum(neg_features)
+                            # real_prob = sum(classifier.predict(segment_list))/len(segment_list)
+                            if real_prob >= 0.5:
+                                P_nplus1_given_1 = pos_features[1][int((Entailment_prob-0.1)/10)] / sum(pos_features[1])
+                                P_nplus1_given_0 = neg_features[1][int((Entailment_prob-0.1)/10)] / sum(neg_features[1])
+                                real_news += 1
+                            else:
+                                P_nplus1_given_1 = pos_features[0][int((Entailment_prob-0.1)/10)] / sum(pos_features[0])
+                                P_nplus1_given_0 = neg_features[0][int((Entailment_prob-0.1)/10)] / sum(neg_features[0]) 
+                                fake_news += 1                               
+                        else:
+                            P_nplus1_given_1 = pos_features[int((Entailment_prob-0.1)/10)] / sum(pos_features)
+                            P_nplus1_given_0 = neg_features[int((Entailment_prob-0.1)/10)] / sum(neg_features)
                         P = P*P_nplus1_given_1/((1-P)*P_nplus1_given_0+P*P_nplus1_given_1)  
                         
                         #print(P,flush=True) 
                            
                         stop_cost = min_cost(P, C_M, C_FA)
-                        search_cost = C_retrieve + min_cost(cal_En_plus1(neg_features, pos_features, P),C_M, C_FA)
+                        if classifier == None:
+                            search_cost = C_retrieve + min_cost(cal_En_plus1(neg_features, pos_features, P), C_M, C_FA)
+                        else:
+                            search_cost = C_retrieve + min_cost(cal_En_plus1(neg_features[2], pos_features[2], P), C_M, C_FA)
                         
                 hypothesis_P_list.append(P)
                 hypothesis_search_time.append(search_time)
