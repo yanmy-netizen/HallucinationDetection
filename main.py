@@ -43,10 +43,9 @@ def parse_args():
         help = "The model path used to receive promises and hypotheses to output entailment scores.",
     )
     parser.add_argument(
-        "--classify",
-        type = bool,
-        default = True,
-        help = "Whether to classify news.",
+        "--not_classify",
+        action="store_true",
+        help="Whether not to classify news. Default is False."
     )
     parser.add_argument(
         "--classifier",
@@ -167,7 +166,7 @@ def main():
     NBC_file_path = [args.NBC_file_path + "/NBC_positive.json", args.NBC_file_path + "/NBC_negative.json"]
     
     classifier = None
-    if args.classify == True:
+    if args.not_classify == False:
         try:
             classifier = load(args.classifier)
         except:
