@@ -155,7 +155,7 @@ def cal_En_plus1(neg_features, pos_features, P_n):
 def main():
     args = parse_args()
 
-    dataset = get_data(args.test_file_path)
+    dataset = get_data(args.test_file_path)[:100]
     
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -288,7 +288,7 @@ def evaluate(dataset, tokenizer, model, classifier, C_M, C_FA, C_retrieve, P0, n
                                 
                         if classifier != None:
                             real_prob = sum(classifier.predict(segment_list))/len(segment_list)
-                            if real_prob >= 0.5:
+                            if real_prob >= 0.7:
                                 P_nplus1_given_1 = pos_features[1][int((Entailment_prob-0.1)/10)] / sum(pos_features[1])
                                 P_nplus1_given_0 = neg_features[1][int((Entailment_prob-0.1)/10)] / sum(neg_features[1])
                                 real_news += 1
